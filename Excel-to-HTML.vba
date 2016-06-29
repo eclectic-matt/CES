@@ -20,7 +20,7 @@ MathLink = "http://www.sussex.ac.uk/mps/internal/departments/mathematics/ug/ugco
 '''' AMEND THESE WHEN SWITCHING DEPARTMENTS
 '''
 LinkStart = PhysLink
-oFolder = "G:\mps\mps-admin\Physics and Astronomy\Curriculum\2015-16\UG COURSES\Syllabus HTML Tables\"
+oFolder = "C:\Documents"
 '''
 ''''
 
