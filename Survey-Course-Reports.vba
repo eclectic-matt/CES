@@ -9,114 +9,103 @@ End Sub
 
 
 Sub generateAllSplitYearCourseReports()
+    
+    Call startTimer
+    
+    current = 0
+    total = ActiveWorkbook.Sheets.count - 2     'Note: "Course Reports" and "Summary Data" sheets ignored
+    
+    Call ShowProgressForm
 
-Call startTimer
-
-current = 0
-total = ActiveWorkbook.Sheets.count - 1     'Note: Course Reports sheet ignored
-Call ShowProgressForm
-
-Dim EA As Excel.Application
-Set EA = New Excel.Application
-
-Dim reportingWorkbook As Workbook
-Set reportingWorkbook = ActiveWorkbook
-Dim courseTitleToProcess As String
-
-For Each Sheet In ActiveWorkbook.Sheets
-    If (Not Sheet.Name = "Course Reports") And (Not Sheet.Name = "Summary Data") Then
-        courseTitleToProcess = Sheet.Name
-        If gblnDebugging Then
-            Debug.Print "---------------------------"
-            Debug.Print "Generating - " & Sheet.Name
-            Debug.Print "---------------------------"
+    Dim EA As Excel.Application
+    Set EA = New Excel.Application
+    
+    Dim reportingWorkbook As Workbook
+    Set reportingWorkbook = ActiveWorkbook
+    Dim courseTitleToProcess As String
+    
+    For Each Sheet In ActiveWorkbook.Sheets
+        If (Not Sheet.Name = "Course Reports") And (Not Sheet.Name = "Summary Data") Then
+            courseTitleToProcess = Sheet.Name
+            If gblnDebugging Then
+                Debug.Print "---------------------------"
+                Debug.Print "Generating - " & Sheet.Name
+                Debug.Print "---------------------------"
+            End If
+            current = current + 1
+            Call UpdateProgressBar(current, total)
+            'Worksheets(Sheet.Name).Activate
+            Call generateSplitYearCourseReport(reportingWorkbook, courseTitleToProcess)
         End If
-        current = current + 1
-        Call UpdateProgressBar(current, total)
-        'Worksheets(Sheet.Name).Activate
-        Call generateSplitYearCourseReport(reportingWorkbook, courseTitleToProcess)
-    End If
-Next
+    Next
 
-Call Unload(ProgressForm)
-Call endTimer
-Set EA = Nothing
-' Then save the Split Module Sheet (processed within sheets for record)
+    Call Unload(ProgressForm)
+    Call endTimer
+    Set EA = Nothing
 
 End Sub
 
 Sub generateSplitYearCourseReport(reportWb As Workbook, courseCodeToProcess As String)
 
-If gblnDebugging Then
-    Debug.Print "----"
-    Debug.Print "---- START Generate Split Year Course Report"
-    Debug.Print "----"
-    Debug.Print "1) Setting Up"
-End If
+    If gblnDebugging Then
+        Debug.Print "----"
+        Debug.Print "---- START Generate Split Year Course Report"
+        Debug.Print "----"
+        Debug.Print "1) Setting Up"
+    End If
 
-'Dim EA As Excel.Application
-'Set EA = New Excel.Application
+    ' repWb = the Workbook/Sheet to be reported (Split Course Sheets)
+    Dim repWb As Workbook
+    Dim repWs As Worksheet
+    Dim repWsName As String
+    Set repWb = reportWb
+    repWsName = courseCodeToProcess             'Debug.Print repWsName
+    Set repWs = repWb.Worksheets(repWsName)     'Set repWs = repWb.ActiveSheet
 
-Dim repWb As Workbook
-Dim repWs As Worksheet
+    ' refWb = the REFERENCE Workbook/Sheet containing cohort sizes and other reporting data
+    Dim refWb As Workbook
+    Dim refWs As Worksheet
+    
+    ' sumWs = the SUMMARY Worksheet (part of repWb) to populate with summary data
+    Dim sumWs As Worksheet
+    Set sumWs = repWb.Worksheets("Summary Data")
 
-Dim repWsName As String
-Set repWb = reportWb
-repWsName = courseCodeToProcess
-'Debug.Print repWsName
-Set repWs = repWb.Worksheets(repWsName)
-'Set repWs = repWb.ActiveSheet
+    responseCount = Range("E" & Rows.count).End(xlUp).Row - 1
+    courseCode = repWs.Name         'ActiveSheet.Name
+    courseTitle = courseCode & " - " & repWs.Range("A1").Text
+    If gblnDebugging Then
+        Debug.Print "       TOTAL (all years) responses: " & responseCount
+        Debug.Print "       Reporting for " & courseTitle & " with " & responseCount & " responses"
+    End If
 
-Dim refWb As Workbook
-Dim refWs As Worksheet
-Dim sumWs As Worksheet
-Set sumWs = repWb.Worksheets("Summary Data")
+    ' USING refWb AS REFERENCE FOR COHORT SIZES
+    fileBoo = False                                 ' Testing this as issues with open files
+    fileBoo = IsWorkBookOpen(gstrRefWbFile)
+    If fileBoo = True Then
+        Set refWb = Workbooks(gstrRefWbName)
+    Else
+        Set refWb = Workbooks.Open(gstrRefWbFile)
+    End If
+    Set refWs = refWb.Sheets("COURSES")
 
-responseCount = Range("E" & Rows.count).End(xlUp).Row - 1
-courseCode = repWs.Name         'ActiveSheet.Name
-courseTitle = courseCode & " - " & repWs.Range("A1").Text
-If gblnDebugging Then
-    Debug.Print "       TOTAL (all years) responses: " & responseCount
-    Debug.Print "       Reporting for " & courseTitle & " with " & responseCount & " responses"
-End If
+    ' USING origWb AS REFERENCE FOR QUESTION TEXT
+    fileBoo = False                                 ' Testing this as issues with open files
+    fileBoo = IsWorkBookOpen(gstrOrigWbFile)
+    If fileBoo = True Then
+        Set origWb = Application.Workbooks(gstrOrigWbName)       ' File is open
+    Else
+        Set origWb = Workbooks.Open(gstrOrigWbFile)     ' File is Closed
+        'Set origWb = Workbooks.Open(FileName:=gstrOrigWbFile, IgnoreReadOnlyRecommended:=True, UpdateLinks:=0, ReadOnly:=True)      'Causing errors?
+    End If
 
-' USING refWb AS REFERENCE FOR COHORT SIZES
-fileBoo = False                                 ' Testing this as issues with open files
-'fileBoo = IsWorkBookOpen(gstrRefWbFile)
-'If fileBoo = True Then
-'    Set refWb = Application.Workbooks(gstrRefWbName)         ' File is open
-'Else
-'    'Set refWb = Workbooks.Open(gstrRefWbFile)     ' File is Closed
-'    Set refWb = Workbooks.Open(FileName:=gstrRefWbFile, IgnoreReadOnlyRecommended:=True, UpdateLinks:=0, ReadOnly:=True)
-'End If
-'Set refWs = refWb.Sheets("COURSES")
+    If gblnDebugging Then
+        Debug.Print "2) Check cohort size and threshold disclaimer"
+    End If
 
+' OKAY.... here is where updates are needed - cohortSize and responseThreshold no longer saved in sheet
+' UPDATES HERE!!!!
 
-' Reference Workbook contains cohort sizes etc
-fileBoo = IsWorkBookOpen(gstrRefWbFile)
-If fileBoo = True Then
-    Set refWb = Workbooks(gstrRefWbName)
-Else
-    Set refWb = Workbooks.Open(gstrRefWbFile)
-End If
-Set refWs = refWb.Sheets("COURSES")
-'/////////
-
-' USING origWb AS REFERENCE FOR QUESTION TEXT
-fileBoo = False                                 ' Testing this as issues with open files
-fileBoo = IsWorkBookOpen(gstrOrigWbFile)
-If fileBoo = True Then
-    Set origWb = Application.Workbooks(gstrOrigWbName)       ' File is open
-Else
-    Set origWb = Workbooks.Open(gstrOrigWbFile)     ' File is Closed
-    'Set origWb = Workbooks.Open(FileName:=gstrOrigWbFile, IgnoreReadOnlyRecommended:=True, UpdateLinks:=0, ReadOnly:=True)      'Causing errors?
-End If
-
-If gblnDebugging Then
-    Debug.Print "2) Check cohort size and threshold disclaimer"
-End If
-
-cohortSize = repWs.Range("B1").Text
+'cohortSize = repWs.Range("B1").Text
 responseRate = Round((responseCount / cohortSize) * 100, 2) & "%"
 responseThreshold = repWs.Range("C1").Text
 repWs.Range("A2:CE" & responseCount + 1).Sort key1:=repWs.Range("$CE:$CE"), Order2:=xlAscending ', Orientation:=xlTopToBottom, SortMethod:=xlPinYin, Header:=xlYes, MatchCase:=False,
