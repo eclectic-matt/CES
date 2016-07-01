@@ -54,6 +54,13 @@ Sub generateSplitYearCourseReport(reportWb As Workbook, courseCodeToProcess As S
         Debug.Print "1) Setting Up"
     End If
 
+    Dim EA As Excel.Application
+    Set EA = New Excel.Application
+    Dim wrdApp As Word.Application
+    Dim wrdDoc As Word.document
+    Set wrdApp = CreateObject("Word.Application")
+    wrdApp.Visible = False
+    
     ' repWb = the Workbook/Sheet to be reported (Split Course Sheets)
     Dim repWb As Workbook
     Dim repWs As Worksheet
@@ -89,14 +96,14 @@ Sub generateSplitYearCourseReport(reportWb As Workbook, courseCodeToProcess As S
     Set refWs = refWb.Sheets("COURSES")
 
     ' USING origWb AS REFERENCE FOR QUESTION TEXT
-    fileBoo = False                                 ' Testing this as issues with open files
-    fileBoo = IsWorkBookOpen(gstrOrigWbFile)
-    If fileBoo = True Then
-        Set origWb = Application.Workbooks(gstrOrigWbName)       ' File is open
-    Else
-        Set origWb = Workbooks.Open(gstrOrigWbFile)     ' File is Closed
-        'Set origWb = Workbooks.Open(FileName:=gstrOrigWbFile, IgnoreReadOnlyRecommended:=True, UpdateLinks:=0, ReadOnly:=True)      'Causing errors?
-    End If
+    'fileBoo = False                                 ' Testing this as issues with open files
+    'fileBoo = IsWorkBookOpen(gstrOrigWbFile)
+    'If fileBoo = True Then
+    '    Set origWb = Application.Workbooks(gstrOrigWbName)       ' File is open
+    'Else
+    '    Set origWb = Workbooks.Open(gstrOrigWbFile)     ' File is Closed
+    '    'Set origWb = Workbooks.Open(FileName:=gstrOrigWbFile, IgnoreReadOnlyRecommended:=True, UpdateLinks:=0, ReadOnly:=True)      'Causing errors?
+    'End If
 
     If gblnDebugging Then
         Debug.Print "2) Check cohort size and threshold disclaimer"
@@ -106,8 +113,8 @@ Sub generateSplitYearCourseReport(reportWb As Workbook, courseCodeToProcess As S
 ' UPDATES HERE!!!!
 
 'cohortSize = repWs.Range("B1").Text
-responseRate = Round((responseCount / cohortSize) * 100, 2) & "%"
-responseThreshold = repWs.Range("C1").Text
+'responseRate = Round((responseCount / cohortSize) * 100, 2) & "%"
+'responseThreshold = repWs.Range("C1").Text
 repWs.Range("A2:CE" & responseCount + 1).Sort key1:=repWs.Range("$CE:$CE"), Order2:=xlAscending ', Orientation:=xlTopToBottom, SortMethod:=xlPinYin, Header:=xlYes, MatchCase:=False,
 
 If gblnDebugging Then
@@ -118,8 +125,9 @@ studyYearCol = "$CE" & 2 & ":$CE" & (responseCount + 2)
 studyYears = repWs.Range(studyYearCol)
 
 yearFound = -100
-Dim StudyYearsToProcess(0 To 4) As Integer      ' an array from 0 - 4 (the main UG study years) whose values are the # of respondents for that year
-yearCounter = 1                                 ' Number of students in each year
+Dim StudyYearsToProcess(gintLowestStudyYear To gintHighestStudyYear) As Integer      ' an array from 0 - 4 (the main UG study years) whose values are the # of responses for that year
+Dim CohortSizes(gintLowestStudyYear To gintHighestStudyYear) As Integer              ' an array from 0 - 4 (the main UG study years) whose values are the cohortSize for that year
+yearCounter = 1                                                                      ' Number of students in each year
 thisRow = 1
 'PWDcount = 0
 For Each Cell In studyYears
@@ -145,17 +153,20 @@ Next
 startRow = 2
 Dim counts
 
-For a = 0 To UBound(StudyYearsToProcess)
+Debug.Print "Uboud years = " & UBound(StudyYearsToProcess)
+For a = gintLowestStudyYear To UBound(StudyYearsToProcess)
     If Not StudyYearsToProcess(a) = 0 Then
         ' Generate statistical data for this course
         responseCount = StudyYearsToProcess(a)
         Debug.Print "Resp Count for Year " & a & " = " & responseCount
         ' cohortSize = lookup in reference sheet, the column based on "a" (StudyYear)
-        Set cohortRowFound = refWs.Range(gstrCourseLookupRng).Find(What:=repWs.Name, After:=refWs.Range(Left(gstrCourseLookupRng, InStr(1, gstrCourseLookupRng, ":") - 1)), LookIn:=xlValues)
-        Debug.Print(cohortRowFound)
-        cohortSize = refWs.Cells(cohortRowFound,4+a).Value2
-        Debug.Print(cohortSize)
-        responseRate = Round((responseCount / cohortSize) * 100, 2) & "%"
+        'Set cohortRowFound = refWs.Range(gstrCourseLookupRng).Find(What:=repWs.Name, After:=refWs.Range(Left(gstrCourseLookupRng, InStr(1, gstrCourseLookupRng, ":") - 1)), LookIn:=xlValues)
+        CohortSizes(a) = EA.WorksheetFunction.VLookup(repWs.Name, refWs.Range(gstrCourseLookupRng), 3 + a, False)
+        'Debug.Print (cohortSizeFound)
+        'cohortSize = refWs.Cells(cohortRowFound, 3 + a).Value2
+        'Debug.Print (cohortSize)
+        responseRate = Round((responseCount / CohortSizes(a)) * 100, 2) & "%"
+        threshold = getResponseThreshold(CohortSizes(a))
         
         counts = Array(0, 0, 0, 0)
         
@@ -173,7 +184,7 @@ For a = 0 To UBound(StudyYearsToProcess)
             'End If
             cellA = Cells(startRow, gintCourseDataStartCol + Index).Address(False, False)
             cellB = Cells(startRow + responseCount - 1, gintCourseDataStartCol + Index).Address(False, False)
-            Debug.Print "statRange = " & cellA & ":" & cellB
+'            Debug.Print "statRange = " & cellA & ":" & cellB
             Set statRange = repWs.Range(cellA & ":" & cellB)
             
             ' MEDIAN AND AVERAGE *CANNOT* HANDLE SINGLE CELLS, SO SKIP
@@ -242,44 +253,51 @@ For a = 0 To UBound(StudyYearsToProcess)
         
     End If
     
-    
+    If Not (CohortSizes(a) = 0) Then
+        With sumWs
+            endRow = .Range("A" & Rows.count).End(xlUp).Row + 1
+            If gblnDebugging Then
+                Debug.Print "Summary End Row = " & endRow
+            End If
+            .Cells(endRow, 1) = courseCode
+            .Cells(endRow, 2) = courseTitle
+            .Cells(endRow, 3) = CohortSizes(a)
+            .Cells(endRow, 4) = responseRate
+            .Cells(endRow, 5) = Average
+            .Cells(endRow, 6) = Median
+            .Cells(endRow, 7) = ValidResponses
+            .Cells(endRow, 8) = a
+            If CohortSizes(a) < gintPublicationThreshold Then
+                .Cells(endRow, 9) = "Not Published"
+            End If
+        End With
+     End If
+Debug.Print "a = " & a
+' END - For a = 0 to UBound(StudyYearsToProcess)
 Next
 
-With sumWs
-    endRow = .Range("A" & Rows.count).End(xlUp).Row + 1
-    If gblnDebugging Then
-        Debug.Print "Summary End Row = " & endRow
-    End If
-    .Cells(endRow, 1) = courseCode
-    .Cells(endRow, 2) = courseTitle
-    .Cells(endRow, 3) = cohortSize
-    .Cells(endRow, 4) = responseRate
-    .Cells(endRow, 5) = Average
-    .Cells(endRow, 6) = Median
-    .Cells(endRow, 7) = ValidResponses
-    .Cells(endRow, 8) = StudyYear
-End With
-    
+
 ' PART 2 - CREATING A COURSE REPORT
 If gblnDebugging Then
     Debug.Print "4) Create Word Doc"
 End If
-Dim wrdApp As Word.Application
-Dim wrdDoc As Word.document
-Set wrdApp = CreateObject("Word.Application")
-wrdApp.Visible = False
-
-If cohortSize < gintPublicationThreshold Then
-    oName = gstrReportsFilePath & "COURSE REPORTS\" & "DO NOT PUBLISH - " & sanitisedCourseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
-    wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
-    wrdDoc.Close (False)
-    sumWs.Cells(endRow, 8) = "Not Published"
-    GoTo doNotPublish
-End If
 
 ''''' WORKING HERE!!!
 startRow = 2    'Then startRow = responseCount + startRow + gintStatRows
-For StudyYear = 0 To 4
+For StudyYear = gintLowestStudyYear To gintHighestStudyYear
+    ' For publication, cohortSize >= 4
+    Debug.Print "Study Year = " & StudyYear & " + cohort = " & CohortSizes(StudyYear)
+    If CohortSizes(StudyYear) < gintPublicationThreshold Then
+        
+        ' Do nothing? Noted that this should not be published!
+        oName = gstrReportsFilePath & "COURSE REPORTS\" & "DO NOT PUBLISH - " & courseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+        Set wrdDoc = wrdApp.Documents.Add
+        wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
+        wrdDoc.Close (False)
+        'GoTo doNotPublish
+        
+    End If
+    
     Debug.Print "Checking Year " & StudyYear & " (" & StudyYearsToProcess(StudyYear) & ")"
     If Not StudyYearsToProcess(StudyYear) = 0 Then
         'Debug.Print "Processing Year " & studyYear
@@ -409,7 +427,7 @@ For StudyYear = 0 To 4
         
         ' Question Title(s)
         'QTitle = Cells(1, gintCourseDataStartCol)
-        QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + 1).Text
+        QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + 1).Text
         If gblnDebugging Then
             Debug.Print "       Question: " & QText
         End If
@@ -452,7 +470,7 @@ For StudyYear = 0 To 4
         ' ----- Getting Response Data
         For questionNo = 1 To 2
             ' Question Title(s)
-            QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
+            QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
             If gblnDebugging Then
                 Debug.Print "       Question: " & QText
             End If
@@ -499,7 +517,7 @@ For StudyYear = 0 To 4
         RowOffset = 2 - FirstQuestion
         For questionNo = FirstQuestion To 5
         ' Question Title(s)
-        QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
+        QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
         If gblnDebugging Then
             Debug.Print "       Question: " & QText
         End If
@@ -542,7 +560,7 @@ For StudyYear = 0 To 4
         RowOffset = 2 - FirstQuestion
         For questionNo = FirstQuestion To 7
         ' Question Title(s)
-        QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
+        QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
         If gblnDebugging Then
             Debug.Print "       Question: " & QText
         End If
@@ -594,7 +612,7 @@ For StudyYear = 0 To 4
         RowOffset = 2 - FirstQuestion
         For questionNo = FirstQuestion To 13
         ' Question Title(s)
-        QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
+        QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
         If gblnDebugging Then
             Debug.Print "       Question: " & QText
         End If
@@ -639,7 +657,7 @@ For StudyYear = 0 To 4
         RowOffset = 2 - FirstQuestion
         questionNo = 14     'For questionNo = FirstQuestion To 14
         ' Question Title(s)
-        QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
+        QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
         If gblnDebugging Then
             Debug.Print "       Question: " & QText
         End If
@@ -680,7 +698,7 @@ For StudyYear = 0 To 4
         RowOffset = 2 - FirstQuestion
         For questionNo = FirstQuestion To 18
         ' Question Title(s)
-        QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
+        QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
         If gblnDebugging Then
             Debug.Print "       Question: " & QText
         End If
@@ -722,7 +740,7 @@ For StudyYear = 0 To 4
         RowOffset = 2 - FirstQuestion
         For questionNo = FirstQuestion To 21
         ' Question Title(s)
-        QText = origWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
+        QText = refWb.Worksheets("REFERENCE").Range("C" & gintCourseDataStartCol + questionNo + 1).Text
         If gblnDebugging Then
             Debug.Print "       Question: " & QText
         End If
@@ -828,5 +846,3 @@ doNotPublish:
     Debug.Print "-------------------------------"
 
 End Sub
-
-
