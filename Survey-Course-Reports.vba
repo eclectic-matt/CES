@@ -150,6 +150,13 @@ For a = 0 To UBound(StudyYearsToProcess)
         ' Generate statistical data for this course
         responseCount = StudyYearsToProcess(a)
         Debug.Print "Resp Count for Year " & a & " = " & responseCount
+        ' cohortSize = lookup in reference sheet, the column based on "a" (StudyYear)
+        Set cohortRowFound = refWs.Range(gstrCourseLookupRng).Find(What:=repWs.Name, After:=refWs.Range(Left(gstrCourseLookupRng, InStr(1, gstrCourseLookupRng, ":") - 1)), LookIn:=xlValues)
+        Debug.Print(cohortRowFound)
+        cohortSize = refWs.Cells(cohortRowFound,4+a).Value2
+        Debug.Print(cohortSize)
+        responseRate = Round((responseCount / cohortSize) * 100, 2) & "%"
+        
         counts = Array(0, 0, 0, 0)
         
         For Index = 0 To gintCourseDataColCount
