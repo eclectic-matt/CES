@@ -1,3 +1,20 @@
+Sub generateOneModuleReport()
+    Dim reportingWorkbook As Workbook
+    Dim moduleTitleToProcess As String
+    Set reportingWorkbook = ActiveWorkbook
+    moduleTitleToProcess = ActiveSheet.Name
+    Call generateSingleModuleReport(reportingWorkbook, moduleTitleToProcess)
+End Sub
+
+Sub generateSpecificModuleReport()
+    Dim reportingWorkbook As Workbook
+    Dim moduleTitleToProcess As String
+    Set reportingWorkbook = Workbooks("Split Module Report Sheets (08-07-16 12.09.28)")
+    moduleTitleToProcess = "V1413"
+    Call generateSingleModuleReport(reportingWorkbook, moduleTitleToProcess)
+End Sub
+
+
 Sub generateAllModuleReports()
 
 Call startTimer
@@ -198,21 +215,29 @@ End If
 Dim statRange As Range
 cellA = Cells(reportingAtRow + 1, 1).Address(False, False)
 cellB = Cells(reportingAtRow + responseCount, 1).Address(False, False)
+Debug.Print repWs.Range(cellA).Value2
+Debug.Print repWs.Range(cellB).Value2
 Set statRange = repWs.Range(cellA & ":" & cellB)
 'statRange = repWs.Range(repWs.Cells(reportingAtRow + 1, 1), repWs.Cells(reportingAtRow + responseCount, 1)).Address(False, False)
 NAcount = False
 If cellA = cellB Then
     Median = statRange
     Average = statRange
-    If statRange = "N/A" Then
+    If statRange.Value2 = "N/A" Then
         NAcount = 1
     Else
         NAcount = 0
     End If
 Else
-    Median = Application.WorksheetFunction.Median(statRange)
-    Average = Round(Application.WorksheetFunction.Average(statRange), 2)
-    NAcount = countIn(statRange, "N/A")
+    If repWs.Range(cellA).Value2 = "N/A" And repWs.Range(cellB).Value2 = "N/A" Then
+        NAcount = 1
+        Median = "N/A"
+        Average = "N/A"
+    Else
+        Median = Application.WorksheetFunction.Median(statRange)
+        Average = Round(Application.WorksheetFunction.Average(statRange), 2)
+        NAcount = countIn(statRange, "N/A")
+    End If
 End If
 'Median = getMedian(ActiveSheet.Range(statRange))                    ' CUSTOM FUNCTION AS OLD VERSION THREW ERRORS! Median = EA.WorksheetFunction.Median(ActiveSheet.Range(statRange))
 'Average = Round(getAverage(ActiveSheet.Range(statRange)), 2)        ' CUSTOM FUNCTION AS OLD VERSION THREW ERRORS! Average = Round(WorksheetFunction.Average(ActiveSheet.Range(statRange)), 2)
@@ -264,23 +289,27 @@ repWs.Cells(reportingAtRow + responseCount + 1, 5) = ValidResponses
 repWs.Cells(reportingAtRow + responseCount + 1, 6) = Average
 repWs.Cells(reportingAtRow + responseCount + 1, 7) = Median
 
+Dim refWb As Workbook
+Dim refWs As Worksheet
+fileBoo = False                                 ' Testing this as issues with open files
+fileBoo = IsWorkBookOpen(gstrRefWbFile)
+If fileBoo = True Then
+    Set refWb = Workbooks(gstrRefWbName)
+    Debug.Print gstrRefWbFile & " -> Open file detected!"
+Else
+    Set refWb = Workbooks.Open(gstrRefWbFile)
+    Debug.Print gstrRefWbFile & " -> Opening this file!"
+End If
+Set refWs = refWb.Sheets("MODULES")
+
+Department = EA.WorksheetFunction.VLookup(repWs.Name, refWs.Range(gstrModuleLookupRng), 4, False)
+School = EA.WorksheetFunction.VLookup(repWs.Name, refWs.Range(gstrModuleLookupRng), 5, False)
+FHEQlevel = EA.WorksheetFunction.VLookup(repWs.Name, refWs.Range(gstrModuleLookupRng), 6, False)
+
 ' PASTE SUMMARY DATA TO SHEET "Summary Data" sumWs
 'CODE   TITLE   COHORT  RESP%   AVERAGE     MEDIAN     VALID    PUBLISHED?
 With sumWs
     endRow = .Range("A" & sumWs.Rows.count).End(xlUp).Row + 1
-    If gblnDebugging Then
-        Debug.Print "---------------------------"
-        Debug.Print "Summary Data"
-        Debug.Print "Summary End Row = " & endRow
-        Debug.Print "CODE = " & moduleCode
-        Debug.Print "TITLE = " & moduleTitle
-        Debug.Print "COHORT = " & cohortSize
-        Debug.Print "RESP = " & responseRate
-        Debug.Print "AVG = " & Average
-        Debug.Print "MED = " & Median
-        Debug.Print "VALID = " & ValidResponses
-        Debug.Print "---------------------------"
-    End If
     .Cells(endRow, 1) = moduleCode
     .Cells(endRow, 2) = moduleTitle
     .Cells(endRow, 3) = cohortSize
@@ -288,11 +317,14 @@ With sumWs
     .Cells(endRow, 5) = Average
     .Cells(endRow, 6) = Median
     .Cells(endRow, 7) = ValidResponses
+    .Cells(endRow, 8) = FHEQlevel
+    .Cells(endRow, 10) = Department
+    .Cells(endRow, 11) = School
 End With
     
 If cohortSize < gintPublicationThreshold Then
-    sumWs.Cells(endRow, 8) = "Not Published"
-    GoTo doNotPublish
+    sumWs.Cells(endRow, 9) = "Not Published"
+    'GoTo doNotPublish
 End If
 
 ' PART 2 - CREATING A MODULE REPORT
@@ -489,8 +521,18 @@ Next
 
 ' Output report as saved PDF document
 wrdDoc.Activate
-sanitisedModuleTitle = Replace(Replace(Replace(Replace(Left(fullModule, 30), ":", " "), "?", ""), "(", ""), ")", "")
-oName = gstrReportsFilePath & "MODULE REPORTS/" & sanitisedModuleTitle & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+If School = "" Or School = "NO SCHOOL" Then
+    School = "OTHER"
+End If
+
+sanitisedModuleTitle = Replace(Replace(Replace(Replace(Left(fullModule, 17), ":", " "), "?", ""), "(", ""), ")", "")
+If cohortSize < gintPublicationThreshold Then
+    'sumWs.Cells(endRow, 9) = "Not Published"
+    'GoTo doNotPublish
+    oName = gstrReportsFilePath & "SCHOOL REPORTS/" & School & "/DO NOT PUBLISH/DO NOT PUBLISH - " & sanitisedModuleTitle & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+Else
+    oName = gstrReportsFilePath & "SCHOOL REPORTS/" & School & "/MODULE REPORTS/" & sanitisedModuleTitle & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+End If
 wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
 wrdDoc.Close (False)
 If gblnDebugging Then
@@ -499,21 +541,24 @@ End If
 wrdApp.Quit (False)
 Set wrdApp = Nothing
 'Set EA = Nothing
-GoTo endOfSub
+'GoTo endOfSub
 
 doNotPublish:
     
-    Set wrdApp = CreateObject("Word.Application")
-    wrdApp.Visible = False
-    Set wrdDoc = wrdApp.Documents.Add
-    oName = gstrReportsFilePath & "MODULE REPORTS/" & "NOT PUBLISHED - " & modCodeFound & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
-    wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
-    wrdDoc.Close (False)
-    If gblnDebugging Then
-        Debug.Print "Saved Report as PDF - " & oName
-    End If
-    wrdApp.Quit (False)
-    Set wrdApp = Nothing
+    'Set wrdApp = CreateObject("Word.Application")
+    'wrdApp.Visible = False
+    'Set wrdDoc = wrdApp.Documents.Add
+    'If School = "" Then
+    '    School = "OTHER"
+    'End If
+    'oName = gstrReportsFilePath & "SCHOOL REPORTS/" & School & "/MODULE REPORTS/" & "NOT PUBLISHED - " & modCodeFound & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+    'wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
+    'wrdDoc.Close (False)
+    'If gblnDebugging Then
+    '    Debug.Print "Saved Report as PDF - " & oName
+    'End If
+    'wrdApp.Quit (False)
+    'Set wrdApp = Nothing
     
 
 endOfSub:
