@@ -5,6 +5,50 @@
 Dim reportingWorkbook As Workbook
 Dim courseTitleToProcess As String
 
+Sub sanitiseAllModuleSheets()
+
+Call startTimer
+
+Dim reportingWorkbook As Workbook
+Set reportingWorkbook = ActiveWorkbook
+Dim moduleCodeToProcess As String
+
+For Each Sheet In ActiveWorkbook.Sheets
+    moduleCodeToProcess = Sheet.Name
+    If (Not moduleCodeToProcess = "Module Reports") And (Not moduleCodeToProcess = "Summary Data") Then
+        If gblnDebugging Then
+            Debug.Print "---------------------------"
+            Debug.Print "Sanitising - " & moduleCodeToProcess
+            Debug.Print "---------------------------"
+        End If
+        Call sanitiseForChecking(moduleCodeToProcess)
+    End If
+Next
+
+Call endTimer
+
+End Sub
+
+Sub sanitiseForChecking(sheetName As String)
+
+With Application.ActiveWorkbook.Sheets(sheetName)
+    endRow = .Range("K" & Rows.count).End(xlUp).Row
+    Debug.Print endRow
+    .Range("B2:CE" & (endRow + 1)).Delete
+    .Rows((endRow + 1) & ":" & (2 * endRow) + 2).EntireRow.Delete
+    .Cells(1, 1).Value = "RespondentID"
+    .Cells(1, 2).Value = "Best Comments"
+    .Cells(1, 3).Value = "Worst Comments"
+    .Cells(1, 4).Value = "Action Taken"
+    .Columns("A:D").AutoFit
+    .Columns("B:C").ColumnWidth = 60
+    .Range("A1:D1").Font.Bold = True
+    With .Range("A2:D" & endRow)
+        .WrapText = True
+        .VerticalAlignment = xlTop
+    End With
+End With
+End Sub
 
 Sub showCountsMsgbox()
 countRange = Application.Selection
@@ -104,8 +148,8 @@ Sub restofcopy()
     
     If Rng.Text = "JOINT" Then
         Debug.Print "JOINT found on row " & Rng.Row
-        Set CopyRng = ActiveSheet.Range(Rng.Offset(1, 0), Rng.Offset(1, 1))
-        CopyRng.Copy
+        Set copyRng = ActiveSheet.Range(Rng.Offset(1, 0), Rng.Offset(1, 1))
+        copyRng.Copy
         'Cells(Rng.Row, Rng.Column + 2).Select
         ActiveSheet.Paste Destination:=ActiveSheet.Range(Cells(Rng.Row, Rng.Column + 2), Cells(Rng.Row, Rng.Column + 2))
         'Selection.PasteSpecial
@@ -228,26 +272,26 @@ End If
 studyYearCol = "$CE" & 2 & ":$CE" & (responseCount + 2)
 studyYears = repWs.Range(studyYearCol)
 
-yearFound = -100
+YearFound = -100
 Dim StudyYearsToProcess(0 To 4) As Integer      ' an array from 0 - 4 (the main UG study years) whose values are the # of respondents for that year
 yearCounter = 1                                 ' Number of students in each year
 thisRow = 1
 'PWDcount = 0
 For Each Cell In studyYears
     thisRow = thisRow + 1
-    If Cell = yearFound Then
+    If Cell = YearFound Then
         ' Same year
         yearCounter = yearCounter + 1
     Else
-        If yearFound = -100 Then
+        If YearFound = -100 Then
             ' Don't process, just start new
-            yearFound = Cell
+            YearFound = Cell
         Else
             ' Different year - Process OLD
             repWs.Rows(thisRow & ":" & (thisRow + (gintStatRows - 1))).EntireRow.Insert
             thisRow = thisRow + gintStatRows
-            StudyYearsToProcess(yearFound) = yearCounter
-            yearFound = Cell
+            StudyYearsToProcess(YearFound) = yearCounter
+            YearFound = Cell
             yearCounter = 1
         End If
     End If
@@ -1477,20 +1521,20 @@ End If
 studyYearCol = "$CE" & 2 & ":$CE" & (responseCount + 2)
 studyYears = repWs.Range(studyYearCol)
 
-yearFound = -100
+YearFound = -100
 Dim StudyYearsToProcess(0 To 4) As Integer      ' an array from 0 - 4 (the main UG study years) whose values are the # of respondents for that year
 yearCounter = 1                                 ' Number of students in each year
 thisRow = 1
 'PWDcount = 0
 For Each Cell In studyYears
 thisRow = thisRow + 1
-    If Cell = yearFound Then
+    If Cell = YearFound Then
         ' Same year
         yearCounter = yearCounter + 1
     Else
-        If yearFound = -100 Then
+        If YearFound = -100 Then
             ' Don't process, just start new
-            yearFound = Cell
+            YearFound = Cell
         Else
             ' Different year - Process OLD
                 'Debug.Print "Splitting on Row " & thisRow & ":" & thisRow + (gintStatRows - 1)
@@ -1502,8 +1546,8 @@ thisRow = thisRow + 1
             'If Cell = "PWD" Then
             '    PWDcount = PWDcount + 1
             'Else
-                StudyYearsToProcess(yearFound) = yearCounter
-                yearFound = Cell
+                StudyYearsToProcess(YearFound) = yearCounter
+                YearFound = Cell
                 yearCounter = 1
             'End If
         End If
