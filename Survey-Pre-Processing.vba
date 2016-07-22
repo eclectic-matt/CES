@@ -2,6 +2,12 @@
 ' FOR SPLITTING AND SANITISING THE DATA
 '--------------------------------------
 
+'----------------------------
+' @name getResponseThreshold
+' @param CohortSize = the number of eligible students
+' @descr A standard function to return the threshold for the disclaimer message
+' @usage Run on each cohort (e.g. year) to check if responseCount > threshold
+'----------------------------
 Function getResponseThreshold(ByVal cohortSize)
     getResponseThreshold = Application.Max(4, Round(((cohortSize + 0.5) / 2), 0))
     If gblnDebugging Then
@@ -26,9 +32,31 @@ Else
     Application.ScreenUpdating = False
 End If
 
+Dim studyYearWb As Workbook
+Dim studyYearWs As Worksheet
+'NEEDS COURSE YEAR VLOOKUP'ED INTO THE SHEET
+fileBoo = IsWorkBookOpen(gstrStudyYearFile)
+If fileBoo = True Then
+    Set studyYearWb = Workbooks(gstrStudyYearName)     'File is open
+Else
+    Set studyYearWb = Workbooks.Open(gstrStudyYearFile) 'File is Closed
+End If
+Windows("Responses - FINAL data including partial responses 22.6.16.xlsx"). _
+        Activate
+Range("CE3").Select
+ActiveCell.FormulaR1C1 = _
+    "=VLOOKUP(RC[-72],'[EDITED - FORMATTED STUDENT SURVEY DATA WITH YEAR OF PROGRAMME.xlsx]List_Frame'!C3:C4,2,FALSE)"
+Range("CE3").Select
+Selection.AutoFill Destination:=Range("CE3:CE2004")
+Range("CE3:CE2004").Select
+Columns("CE:CE").Select
+Selection.Copy
+Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+    :=False, Transpose:=False
+
 ' Setup ORIG workbook/sheet - duplicated for reports
 Dim origWb As Workbook
-Dim gstrOrigWbFile As String
+'Dim gstrOrigWbFile As String
 
 Dim courseWb As Workbook
 Dim courseWs As Worksheet
@@ -68,13 +96,15 @@ Set sumWs = courseWb.Sheets("Summary Data")
 With sumWs
     .Cells(1, 1) = "Course Code"
     .Cells(1, 2) = "Course Title"
-    .Cells(1, 3) = "Cohort Size"
-    .Cells(1, 4) = "Response Rate (%)"
-    .Cells(1, 5) = "Average"
-    .Cells(1, 6) = "Median"
-    .Cells(1, 7) = "Valid Responses"
-    .Cells(1, 8) = "Study Year"
+    .Cells(1, 3) = "Study Year"
+    .Cells(1, 4) = "Cohort Size"
+    .Cells(1, 5) = "Response Rate (%)"
+    .Cells(1, 6) = "Average Satisfaction"
+    .Cells(1, 7) = "Median Satisfaction"
+    .Cells(1, 8) = "Valid Responses"
     .Cells(1, 9) = "Published Flag"
+    .Cells(1, 10) = "Department"
+    .Cells(1, 11) = "School"
 End With
 
 ' Now sort this sheet by COURSE ready to sanitise
@@ -154,7 +184,7 @@ courseWs.Range("A" & starterRow & ":CE" & (currentRow + 1)).Copy Destination:=ne
 '''' END FINAL COURSE
 
 ' Save and end routine
-courseWb.SaveAs FileName:=gstrReportsFilePath & "COURSE REPORTS\Split Course Report Sheets (" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & ").xlsx", FileFormat:=xlOpenXMLWorkbook
+courseWb.SaveAs FileName:=gstrReportsFilePath & "Split Course Report Sheets (" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & ").xlsx", FileFormat:=xlOpenXMLWorkbook
 
 If Not gblnDebugging Then
     Application.ScreenUpdating = True
@@ -190,16 +220,22 @@ Dim EA As Excel.Application
 Set EA = New Excel.Application
 
 ' Check ORIG workbook open and set to origWb/origWs
-fileBoo = IsWorkBookOpen(gstrOrigWbFile)
-If fileBoo = True Then
+'If gblnDebugging Then
+'    Debug.Print "OrigWB Open Test - " & gstrOrigWbFile
+'End If
+'fileBoo = IsWorkBookOpen(gstrOrigWbFile)
+'If fileBoo = True Then
     Set origWb = Workbooks(gstrOrigWbName)     'File is open
-Else
-    Set origWb = Workbooks.Open(gstrOrigWbFile) 'File is Closed
-End If
-Dim origWs As Worksheet
+'Else
+'    Set origWb = Workbooks.Open(gstrOrigWbFile) 'File is Closed
+'End If
+'Dim origWs As Worksheet
 Set origWs = origWb.Sheets(gstrOrigWsName)
 
 ' Reference Workbook contains cohort sizes etc
+If gblnDebugging Then
+    Debug.Print "RefWB Open Test - " & gstrRefWbFile
+End If
 fileBoo = IsWorkBookOpen(gstrRefWbFile)
 If fileBoo = True Then
     Set refWb = Workbooks(gstrRefWbName)
@@ -222,10 +258,13 @@ With moduleWb.Sheets("Summary Data")
     .Cells(1, 2) = "Module Title"
     .Cells(1, 3) = "Cohort Size"
     .Cells(1, 4) = "Response Rate (%)"
-    .Cells(1, 5) = "Average"
-    .Cells(1, 6) = "Median"
+    .Cells(1, 5) = "Average Satisfaction"
+    .Cells(1, 6) = "Median Satisfaction"
     .Cells(1, 7) = "Valid Responses"
-    .Cells(1, 8) = "Published Flag"
+    .Cells(1, 8) = "FHEQ Level"
+    .Cells(1, 9) = "Published Flag"
+    .Cells(1, 10) = "Department"
+    .Cells(1, 11) = "School"
 End With
 
 finalRow = moduleWs.Range("A" & Rows.count).End(xlUp).Row
@@ -289,7 +328,7 @@ If gblnDebugging Then
 End If
 
 Application.ScreenUpdating = True
-moduleWb.SaveAs FileName:=gstrReportsFilePath & "MODULE REPORTS\Split Module Report Sheets (" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & ").xlsx", FileFormat:=xlOpenXMLWorkbook
+moduleWb.SaveAs FileName:=gstrReportsFilePath & "\Split Module Report Sheets (" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & ").xlsx", FileFormat:=xlOpenXMLWorkbook
 
 refWb.Close False
 origWb.Close False
