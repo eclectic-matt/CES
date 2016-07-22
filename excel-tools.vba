@@ -246,11 +246,16 @@ End Sub
 '----------------------------
 Sub endTimer()
 timeTaken = Timer - tStart
-tMins = Round(timeTaken / 60, 0)
-tSecs = timeTaken - (60 * tMins)
+'tMins = Round(timeTaken / 60, 0)
+tMins = Int(timeTaken / 60)
+tSecs = Format(timeTaken Mod 60, "00")
+
+'tMins = timeTaken Mod 60
+'tSecs = timeTaken - (60 * tMins)
 MsgBox ("This process took " & timeTaken & " secs" & _
         vbNewLine & vbNewLine & _
-        tMins & " minutes and " & tSecs & " seconds.")
+        tMins & " minutes and " & tSecs & " seconds." & _
+        vbCr & tMins & ":" & tSecs)
 End Sub
 
 '----------------------------
@@ -324,17 +329,16 @@ End Sub
 ' @usage Assign a boolean variable to IsWorkBookOpen, can then IF to either Set or Open this WB w/o errors
 ' @src   http://stackoverflow.com/questions/9373082/detect-whether-excel-workbook-is-already-open/9373914#9373914
 '----------------------------
-Function IsWorkBookOpen(FileName As String)
+Function IsWorkBookOpen(FileToTest As String)
     Dim ff As Long, ErrNo As Long
-
-    If Workbooks(FileName).CanCheckOut = False Then
+    If Workbooks.CanCheckOut(FileName:=FileToTest) = False Then
         IsWorkBookOpen = False
-        Debug.Print "Locked file detected!"
+        Debug.Print FileToTest & " -> Locked file detected!"
     End If
         
     On Error Resume Next
     ff = FreeFile()
-    Open FileName For Input Lock Read As #ff
+    Open FileToTest For Input Lock Read As #ff
     Close ff
     ErrNo = Err
     On Error GoTo 0
