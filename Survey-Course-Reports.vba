@@ -77,7 +77,7 @@ Sub generateSplitYearCourseReport(reportWb As Workbook, courseCodeToProcess As S
     Dim sumWs As Worksheet
     Set sumWs = repWb.Worksheets("Summary Data")
 
-    responseCount = Range("E" & Rows.count).End(xlUp).Row - 1
+    responseCount = Range("A" & Rows.count).End(xlUp).Row - 1
     courseCode = repWs.Name         'ActiveSheet.Name
     courseTitle = courseCode & " - " & repWs.Range("A1").Text
     If gblnDebugging Then
@@ -90,8 +90,10 @@ Sub generateSplitYearCourseReport(reportWb As Workbook, courseCodeToProcess As S
     fileBoo = IsWorkBookOpen(gstrRefWbFile)
     If fileBoo = True Then
         Set refWb = Workbooks(gstrRefWbName)
+        Debug.Print gstrRefWbFile & " -> Open file detected!"
     Else
         Set refWb = Workbooks.Open(gstrRefWbFile)
+        Debug.Print gstrRefWbFile & " -> Opening this file!"
     End If
     Set refWs = refWb.Sheets("COURSES")
 
@@ -118,13 +120,13 @@ Sub generateSplitYearCourseReport(reportWb As Workbook, courseCodeToProcess As S
 repWs.Range("A2:CE" & responseCount + 1).Sort key1:=repWs.Range("$CE:$CE"), Order2:=xlAscending ', Orientation:=xlTopToBottom, SortMethod:=xlPinYin, Header:=xlYes, MatchCase:=False,
 
 If gblnDebugging Then
-    Debug.Print "3) Getting course statistical data"
+    Debug.Print "3a) Getting study year summary data"
 End If
 
-studyYearCol = "$CE" & 2 & ":$CE" & (responseCount + 2)
+studyYearCol = "$CE" & 2 & ":$CE" & (responseCount + 3)
 studyYears = repWs.Range(studyYearCol)
 
-yearFound = -100
+YearFound = -100
 Dim StudyYearsToProcess(gintLowestStudyYear To gintHighestStudyYear) As Integer      ' an array from 0 - 4 (the main UG study years) whose values are the # of responses for that year
 Dim CohortSizes(gintLowestStudyYear To gintHighestStudyYear) As Integer              ' an array from 0 - 4 (the main UG study years) whose values are the cohortSize for that year
 yearCounter = 1                                                                      ' Number of students in each year
@@ -132,26 +134,34 @@ thisRow = 1
 'PWDcount = 0
 For Each Cell In studyYears
     thisRow = thisRow + 1
-    If Cell = yearFound Then
+    If Cell = YearFound Then
         ' Same year
         yearCounter = yearCounter + 1
     Else
-        If yearFound = -100 Then
+        If YearFound = -100 Then
             ' Don't process, just start new
-            yearFound = Cell
+            YearFound = Cell
         Else
             ' Different year - Process OLD
             repWs.Rows(thisRow & ":" & (thisRow + (gintStatRows - 1))).EntireRow.Insert
             thisRow = thisRow + gintStatRows
-            StudyYearsToProcess(yearFound) = yearCounter
-            yearFound = Cell
+            StudyYearsToProcess(Int(YearFound)) = Int(yearCounter)
+            Debug.Print "Students in Year " & YearFound & " = " & yearCounter
+            YearFound = Cell
             yearCounter = 1
         End If
     End If
 Next
+If Not YearFound = "" Then
+    StudyYearsToProcess(Int(YearFound)) = Int(yearCounter)
+End If
 
 startRow = 2
 Dim counts
+
+If gblnDebugging Then
+    Debug.Print "3b) Generate course statistical data"
+End If
 
 Debug.Print "Uboud years = " & UBound(StudyYearsToProcess)
 For a = gintLowestStudyYear To UBound(StudyYearsToProcess)
@@ -162,6 +172,9 @@ For a = gintLowestStudyYear To UBound(StudyYearsToProcess)
         ' cohortSize = lookup in reference sheet, the column based on "a" (StudyYear)
         'Set cohortRowFound = refWs.Range(gstrCourseLookupRng).Find(What:=repWs.Name, After:=refWs.Range(Left(gstrCourseLookupRng, InStr(1, gstrCourseLookupRng, ":") - 1)), LookIn:=xlValues)
         CohortSizes(a) = EA.WorksheetFunction.VLookup(repWs.Name, refWs.Range(gstrCourseLookupRng), 3 + a, False)
+        Department = EA.WorksheetFunction.VLookup(repWs.Name, refWs.Range(gstrCourseLookupRng), 6, False)
+        School = EA.WorksheetFunction.VLookup(repWs.Name, refWs.Range(gstrCourseLookupRng), 7, False)
+        Debug.Print "Cohort for " & a & " is " & CohortSizes(a); " in " & School & " -> " & Department
         'Debug.Print (cohortSizeFound)
         'cohortSize = refWs.Cells(cohortRowFound, 3 + a).Value2
         'Debug.Print (cohortSize)
@@ -232,6 +245,13 @@ For a = gintLowestStudyYear To UBound(StudyYearsToProcess)
                 twoCnt = Format(counts(2) / ValidResponses, "0.0%")
                 thrCnt = Format(counts(3) / ValidResponses, "0.0%")
             End If
+            
+            If Index = 0 Then
+                CourseAvg = Average
+                CourseMdn = Median
+                CourseVal = ValidResponses
+            End If
+            
             ' If 6 responses (in Rows 2,3,4,5,6,7) then start printing stat data at Row 8
             repWs.Cells(startRow + responseCount, gintCourseDataStartCol + Index) = zeroCnt
             repWs.Cells(startRow + responseCount + 1, gintCourseDataStartCol + Index) = oneCnt
@@ -250,6 +270,7 @@ For a = gintLowestStudyYear To UBound(StudyYearsToProcess)
         lastCell = "CE" & startRow + StudyYearsToProcess(a) - 1
         'Debug.Print "For Year " & a & " there are " & StudyYearsToProcess(a) & " students who have responded in " & firstCell & ":" & lastCell
         startRow = startRow + StudyYearsToProcess(a) + gintStatRows
+        Debug.Print "Course (" & courseCode & ") Year (" & a & ") endRow = " & startRow - 1
         
     End If
     
@@ -260,16 +281,18 @@ For a = gintLowestStudyYear To UBound(StudyYearsToProcess)
                 Debug.Print "Summary End Row = " & endRow
             End If
             .Cells(endRow, 1) = courseCode
-            .Cells(endRow, 2) = courseTitle
-            .Cells(endRow, 3) = CohortSizes(a)
-            .Cells(endRow, 4) = responseRate
-            .Cells(endRow, 5) = Average
-            .Cells(endRow, 6) = Median
-            .Cells(endRow, 7) = ValidResponses
-            .Cells(endRow, 8) = a
+            .Cells(endRow, 2) = repWs.Range("A1").Text
+            .Cells(endRow, 3) = a
+            .Cells(endRow, 4) = CohortSizes(a)
+            .Cells(endRow, 5) = responseRate
+            .Cells(endRow, 6) = CourseAvg
+            .Cells(endRow, 7) = CourseMdn
+            .Cells(endRow, 8) = CourseVal
             If CohortSizes(a) < gintPublicationThreshold Then
                 .Cells(endRow, 9) = "Not Published"
             End If
+            .Cells(endRow, 10) = Department
+            .Cells(endRow, 11) = School
         End With
      End If
 Debug.Print "a = " & a
@@ -281,19 +304,25 @@ Next
 If gblnDebugging Then
     Debug.Print "4) Create Word Doc"
 End If
+Dim DNPflag As Boolean
 
 ''''' WORKING HERE!!!
 startRow = 2    'Then startRow = responseCount + startRow + gintStatRows
 For StudyYear = gintLowestStudyYear To gintHighestStudyYear
+    DNPflag = False
     ' For publication, cohortSize >= 4
     Debug.Print "Study Year = " & StudyYear & " + cohort = " & CohortSizes(StudyYear)
     If CohortSizes(StudyYear) < gintPublicationThreshold Then
         
         ' Do nothing? Noted that this should not be published!
-        oName = gstrReportsFilePath & "COURSE REPORTS\" & "DO NOT PUBLISH - " & courseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
-        Set wrdDoc = wrdApp.Documents.Add
-        wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
-        wrdDoc.Close (False)
+        DNPflag = True
+        'If School = "" Then
+        '    School = "OTHER"
+        'End If
+        'oName = gstrReportsFilePath & "SCHOOL REPORTS\" & School & "\COURSE REPORTS\" & "DO NOT PUBLISH - " & courseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+        'Set wrdDoc = wrdApp.Documents.Add
+        'wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
+        'wrdDoc.Close (False)
         'GoTo doNotPublish
         
     End If
@@ -820,11 +849,22 @@ For StudyYear = gintLowestStudyYear To gintHighestStudyYear
         ' Output report as saved PDF document
         wrdDoc.Activate
         sanitisedCourseTitle = Replace(Replace(Replace(Replace(Left(courseTitle, 30), ":", " "), "?", ""), "(", ""), ")", "")
-        oName = gstrReportsFilePath & "COURSE REPORTS\" & sanitisedCourseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
-        wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
-        wrdDoc.Close (False)
-        If gblnDebugging Then
-            Debug.Print "Saved Report as PDF - " & oName
+        If School = "" Or School = "NO SCHOOL" Then
+            School = "OTHER"
+        End If
+        If DNPflag = True Then
+            oName = gstrReportsFilePath & "TEMPLATE FOLDERS - copy\" & School & "\DO NOT PUBLISH\" & "DO NOT PUBLISH - " & courseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+        Else
+            oName = gstrReportsFilePath & "TEMPLATE FOLDERS - copy\" & School & "\COURSE REPORTS\" & sanitisedCourseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+        End If
+        ' Testing as errors with no-publish reports
+        If Not wrdDoc Is Nothing Then
+            Debug.Print "wrdDoc found"
+            wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
+            wrdDoc.Close (False)
+            If gblnDebugging Then
+                Debug.Print "Saved Report as PDF - " & oName
+            End If
         End If
         
         ' ALL COURSE REPORTING HERE
@@ -837,12 +877,20 @@ For StudyYear = gintLowestStudyYear To gintHighestStudyYear
     
 Next
 
+
+    'sanitisedCourseTitle = Replace(Replace(Replace(Replace(Left(courseTitle, 30), ":", " "), "?", ""), "(", ""), ")", "")
+    'oName = gstrReportsFilePath & "SCHOOL REPORTS\" & School & "\COURSE REPORTS\DO NOT PUBLISH - " & sanitisedCourseTitle & " YEAR " & StudyYear & " [" & Format(Date, "dd-mm-yy") & " " & Format(Time, "hh.mm.ss") & "].pdf"
+    'wrdDoc.SaveAs2 FileName:=oName, FileFormat:=wdFormatPDF
 doNotPublish:
+    'wrdDoc.Close (False)
+    'Debug.Print "Saved Report as PDF - " & oName
     wrdApp.Quit (False)
     Set wrdApp = Nothing
-    'Set EA = Nothing
     Debug.Print "-------------------------------"
     Debug.Print "COMPLETE - " & courseTitle
     Debug.Print "-------------------------------"
 
 End Sub
+
+
+
