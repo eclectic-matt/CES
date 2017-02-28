@@ -936,35 +936,3 @@ Select Case (returnType)
 End Select
 
 End Function
-
-'FROM: http://stackoverflow.com/a/152333
-Sub QuickSort(ByRef Field() As Variant, ByVal LB As Long, ByVal UB As Long)
-    Dim P1 As Long, P2 As Long, Ref As String, TEMP As String
-
-    P1 = LB
-    P2 = UB
-    ItemNo = Round((P1 + P2) / 2, 0)
-    Ref = Field(ItemNo, 1)
-
-    Do
-        Do While (Field(P1, 1) < Ref)
-            P1 = P1 + 1
-        Loop
-
-        Do While (Field(P2, 1) > Ref)
-            P2 = P2 - 1
-        Loop
-
-        If P1 <= P2 Then
-            TEMP = Field(P1, 1)
-            Field(P1, 1) = Field(P2, 1)
-            Field(P2, 1) = TEMP
-
-            P1 = P1 + 1
-            P2 = P2 - 1
-        End If
-    Loop Until (P1 > P2)
-
-    If LB < P2 Then Call QuickSort(Field, LB, P2)
-    If P1 < UB Then Call QuickSort(Field, P1, UB)
-End Sub
