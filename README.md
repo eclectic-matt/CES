@@ -22,4 +22,4 @@ The data output from Qualtrics survey software is saved and processed, as follow
  * Checksheets
   * Generating checking sheets for administrative staff to vet the free-text comments supplied prior to circulation
 
-Some general Visual Basic for Applications code can be found in my [https://github.com/eclectic-matt/Visual-Basic-for-Applications VBA repository]
+Some general Visual Basic for Applications code can be found in my [VBA repository](https://github.com/eclectic-matt/Visual-Basic-for-Applications)
